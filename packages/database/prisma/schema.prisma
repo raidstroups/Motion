@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  projects  Project[]
+}
+
+model Project {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus  @default(draft)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  settings    Json           @default("{}")
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  assets      Asset[]
+  clips       Clip[]
+  scenes      Scene[]
+  shots       Shot[]
+  objects     TrackedObject[]
+  faces       FaceTrack[]
+  audioTracks AudioTrack[]
+  operations  EditOperation[]
+  timelines   Timeline[]
+  versions    ProjectVersion[]
+  renderJobs  RenderJob[]
+  agentRuns   AgentRun[]
+}
+
+enum ProjectStatus {
+  draft
+  processing
+  completed
+  failed
+}
+
+model Asset {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  type        AssetType
+  name        String
+  url         String
+  proxyUrl    String?
+  thumbnailUrl String?
+  mimeType    String
+  size        Int
+  duration    Float?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  clips       Clip[]
+  audioTracks AudioTrack[]
+}
+
+enum AssetType {
+  video
+  audio
+  image
+}
+
+model Clip {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  name      String
+  startTime Float
+  endTime   Float
+  duration  Float
+  inPoint   Float
+  outPoint  Float
+  metadata  Json?
+  scenes    Scene[]
+  shots     Shot[]
+  objects   TrackedObject[]
+  faces     FaceTrack[]
+}
+
+model Scene {
+  id         String   @id @default(uuid())
+  clipId     String
+  clip       Clip     @relation(fields: [clipId], references: [id])
+  startTime  Float
+  endTime    Float
+  duration   Float
+  confidence Float
+  thumbnailUrl String?
+  metadata   Json?
+  shots      Shot[]
+}
+
+model Shot {
+  id         String   @id @default(uuid())
+  sceneId    String
+  scene      Scene    @relation(fields: [sceneId], references: [id])
+  startTime  Float
+  endTime    Float
+  duration   Float
+  cameraMotion String?
+  confidence Float
+}
+
+model TrackedObject {
+  id         String   @id @default(uuid())
+  clipId     String
+  clip       Clip     @relation(fields: [clipId], references: [id])
+  category   String
+  label      String?
+  confidence Float
+  firstFrame Int
+  lastFrame  Int
+  boundingBoxes Json
+  masks      Json?
+  trackingData  Json?
+  embeddings Json?
+  attributes Json?
+}
+
+model FaceTrack {
+  id         String   @id @default(uuid())
+  clipId     String
+  clip       Clip     @relation(fields: [clipId], references: [id])
+  personId   String?
+  confidence Float
+  firstFrame Int
+  lastFrame  Int
+  landmarks  Json?
+  embedding  Json?
+}
+
+model AudioTrack {
+  id           String         @id @default(uuid())
+  projectId    String
+  project      Project        @relation(fields: [projectId], references: [id])
+  assetId      String
+  asset        Asset          @relation(fields: [assetId], references: [id])
+  name         String
+  language     String?
+  isOriginal   Boolean        @default(true)
+  duration     Float
+  sampleRate   Int
+  channels     Int
+  bitrate      Int
+  codec        String
+  segments     AudioSegment[]
+}
+
+model AudioSegment {
+  id         String   @id @default(uuid())
+  trackId    String
+  track      AudioTrack @relation(fields: [trackId], references: [id])
+  startTime  Float
+  endTime    Float
+  type       String
+  speakerId  String?
+  confidence Float
+  text       String?
+  language   String?
+}
+
+model EditOperation {
+  id            String           @id @default(uuid())
+  projectId     String
+  project       Project          @relation(fields: [projectId], references: [id])
+  type          String
+  sourceClipId  String
+  startTime     Float
+  endTime       Float
+  priority      Int
+  status        OperationStatus  @default(planned)
+  confidence    Float
+  dependencies  Json
+  parameters    Json
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  renderJobs    RenderJob[]
+}
+
+enum OperationStatus {
+  planned
+  analyzing
+  processing
+  compositing
+  qa
+  completed
+  failed
+}
+
+model RenderJob {
+  id           String       @id @default(uuid())
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id])
+  operationId  String
+  operation    EditOperation @relation(fields: [operationId], references: [id])
+  type         String
+  priority     JobPriority  @default(normal)
+  status       JobStatus    @default(queued)
+  progress     Float        @default(0)
+  workerId     String?
+  inputAssets  Json
+  outputAssets Json?
+  error        String?
+  retryCount   Int          @default(0)
+  maxRetries   Int          @default(3)
+  createdAt    DateTime     @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  duration     Float?
+  metadata     Json?
+}
+
+enum JobPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum JobStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+model Timeline {
+  id        String         @id @default(uuid())
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id])
+  name      String
+  tracks    Json
+  duration  Float
+  fps       Float
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model ProjectVersion {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  version     Int
+  name        String?
+  description String?
+  editPlanId  String?
+  createdAt   DateTime @default(now())
+  metadata    Json?
+}
+
+model AgentRun {
+  id         String        @id @default(uuid())
+  projectId  String
+  project    Project       @relation(fields: [projectId], references: [id])
+  agentType  String
+  status     AgentStatus   @default(idle)
+  input      Json
+  output     Json?
+  error      String?
+  startedAt  DateTime      @default(now())
+  completedAt DateTime?
+  duration   Float?
+  tokenUsage Json?
+  model      String?
+  messages   AgentMessage[]
+}
+
+enum AgentStatus {
+  idle
+  analyzing
+  planning
+  executing
+  reviewing
+  completed
+  failed
+}
+
+model AgentMessage {
+  id        String    @id @default(uuid())
+  runId     String
+  run       AgentRun  @relation(fields: [runId], references: [id])
+  role      String
+  content   String
+  toolCalls Json?
+  toolResults Json?
+  createdAt DateTime  @default(now())
+}

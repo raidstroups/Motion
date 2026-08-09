@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@motion/shared": ["./packages/shared/src"],
+      "@motion/schemas": ["./packages/schemas/src"],
+      "@motion/database": ["./packages/database/src"],
+      "@motion/agents": ["./packages/agents/src"],
+      "@motion/media": ["./packages/media/src"],
+      "@motion/storage": ["./packages/storage/src"],
+      "@motion/timeline": ["./packages/timeline/src"],
+      "@motion/vfx": ["./packages/vfx/src"],
+      "@motion/audio": ["./packages/audio/src"],
+      "@motion/render": ["./packages/render/src"]
+    }
+  },
+  "exclude": ["node_modules"]
+}
