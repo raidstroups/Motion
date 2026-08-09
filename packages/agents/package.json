@@ -12,8 +12,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai": "^4.0.0",
-    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/openai": "^4.0.36",
+    "ai": "^7.0.58",
     "zod": "^3.24.0"
   },
   "devDependencies": {
