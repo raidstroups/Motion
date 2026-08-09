@@ -1,3 +1,16 @@
+export { userRepository, UserRepository } from './user.repository';
 export { projectRepository, ProjectRepository } from './project.repository';
 export { assetRepository, AssetRepository } from './asset.repository';
+export { clipRepository, ClipRepository } from './clip.repository';
+export { sceneRepository, SceneRepository } from './scene.repository';
+export { shotRepository, ShotRepository } from './shot.repository';
+export { trackedObjectRepository, TrackedObjectRepository } from './tracked-object.repository';
+export { faceTrackRepository, FaceTrackRepository } from './face-track.repository';
+export { audioTrackRepository, AudioTrackRepository } from './audio-track.repository';
+export { audioSegmentRepository, AudioSegmentRepository } from './audio-segment.repository';
+export { editOperationRepository, EditOperationRepository } from './edit-operation.repository';
 export { jobRepository, JobRepository } from './job.repository';
+export { timelineRepository, TimelineRepository } from './timeline.repository';
+export { projectVersionRepository, ProjectVersionRepository } from './project-version.repository';
+export { agentRunRepository, AgentRunRepository } from './agent-run.repository';
+export { agentMessageRepository, AgentMessageRepository } from './agent-message.repository';

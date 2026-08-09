@@ -1,5 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { generateId } from '@motion/shared';
+import { ChildProcess } from 'child_process';
 
 export interface RenderConfig {
   outputFormat: 'mp4' | 'mov' | 'avi' | 'mkv' | 'webm';
@@ -12,19 +13,24 @@ export interface RenderConfig {
 export interface RenderJob {
   id: string;
   projectId: string;
-  status: 'queued' | 'rendering' | 'completed' | 'failed';
+  status: 'queued' | 'rendering' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   outputPath: string;
   config: RenderConfig;
   startTime?: Date;
   endTime?: Date;
   error?: string;
+  process?: ChildProcess;
 }
 
 export interface RenderInput {
   assets: { path: string; startTime?: number; endTime?: number }[];
   operations: { type: string; parameters: Record<string, unknown> }[];
   output: { path: string; config: RenderConfig };
+}
+
+export interface RenderProgressCallback {
+  (jobId: string, progress: number): void;
 }
 
 const defaultConfig: RenderConfig = {
@@ -37,13 +43,25 @@ const defaultConfig: RenderConfig = {
 
 export class RenderEngine {
   private jobs: Map<string, RenderJob> = new Map();
+  private progressCallbacks: Map<string, RenderProgressCallback> = new Map();
 
-  async render(input: RenderInput): Promise<RenderJob> {
+  onProgress(jobId: string, callback: RenderProgressCallback): void {
+    this.progressCallbacks.set(jobId, callback);
+  }
+
+  private notifyProgress(jobId: string, progress: number): void {
+    const callback = this.progressCallbacks.get(jobId);
+    if (callback) {
+      callback(jobId, progress);
+    }
+  }
+
+  async render(input: RenderInput, projectId?: string): Promise<RenderJob> {
     const jobId = generateId();
     
     const job: RenderJob = {
       id: jobId,
-      projectId: '',
+      projectId: projectId || '',
       status: 'queued',
       progress: 0,
       outputPath: input.output.path,
@@ -61,10 +79,17 @@ export class RenderEngine {
       job.status = 'completed';
       job.progress = 100;
       job.endTime = new Date();
+      this.notifyProgress(jobId, 100);
     } catch (error) {
-      job.status = 'failed';
-      job.error = error instanceof Error ? error.message : 'Unknown error';
-      job.endTime = new Date();
+      if (job.status === 'cancelled') {
+        job.endTime = new Date();
+      } else {
+        job.status = 'failed';
+        job.error = error instanceof Error ? error.message : 'Unknown error';
+        job.endTime = new Date();
+      }
+    } finally {
+      this.progressCallbacks.delete(jobId);
     }
     
     return job;
@@ -74,7 +99,6 @@ export class RenderEngine {
     return new Promise((resolve, reject) => {
       let command = ffmpeg();
       
-      // Add input assets
       input.assets.forEach(asset => {
         command = command.input(asset.path);
         
@@ -87,7 +111,6 @@ export class RenderEngine {
         }
       });
       
-      // Apply operations
       const filters: string[] = [];
       
       input.operations.forEach(op => {
@@ -101,9 +124,6 @@ export class RenderEngine {
           case 'crop':
             filters.push(`crop=${op.parameters.width}:${op.parameters.height}:${op.parameters.x}:${op.parameters.y}`);
             break;
-          case 'trim':
-            // Handled via input options
-            break;
           case 'fade':
             filters.push(`fade=t=in:st=${op.parameters.start}:d=${op.parameters.duration}`);
             break;
@@ -114,7 +134,6 @@ export class RenderEngine {
         command = command.videoFilters(filters.join(','));
       }
       
-      // Configure output
       const config = job.config;
       
       switch (config.codec) {
@@ -137,7 +156,6 @@ export class RenderEngine {
           break;
       }
       
-      // Quality settings
       switch (config.quality) {
         case 'draft':
           command = command.outputOptions(['-crf', '28', '-preset', 'ultrafast']);
@@ -153,7 +171,6 @@ export class RenderEngine {
           break;
       }
       
-      // Hardware acceleration
       if (config.hardwareAcceleration) {
         command = command.outputOptions([
           '-hwaccel', 'auto',
@@ -161,18 +178,25 @@ export class RenderEngine {
         ]);
       }
       
-      // Progress tracking
-      command.on('progress', (progress) => {
-        if (progress.percent) {
-          job.progress = Math.round(progress.percent);
-        }
-      });
-      
-      command
+      const ffmpegProcess = command
         .output(job.outputPath)
+        .on('progress', (progress) => {
+          if (progress.percent) {
+            job.progress = Math.round(progress.percent);
+            this.notifyProgress(job.id, job.progress);
+          }
+        })
         .on('end', () => resolve())
-        .on('error', reject)
+        .on('error', (err: Error) => {
+          if (job.status === 'cancelled') {
+            resolve();
+          } else {
+            reject(err);
+          }
+        })
         .run();
+      
+      job.process = ffmpegProcess as any;
     });
   }
 
@@ -180,15 +204,40 @@ export class RenderEngine {
     return this.jobs.get(jobId);
   }
 
+  getAllJobs(): RenderJob[] {
+    return Array.from(this.jobs.values());
+  }
+
+  getJobsByProject(projectId: string): RenderJob[] {
+    return Array.from(this.jobs.values()).filter(job => job.projectId === projectId);
+  }
+
   cancelJob(jobId: string): boolean {
     const job = this.jobs.get(jobId);
-    if (job && job.status === 'rendering') {
-      job.status = 'failed';
-      job.error = 'Cancelled by user';
-      job.endTime = new Date();
-      return true;
+    if (!job) return false;
+    
+    if (job.status === 'rendering' && job.process) {
+      job.process.kill('SIGKILL');
     }
-    return false;
+    
+    job.status = 'cancelled';
+    job.endTime = new Date();
+    
+    return true;
+  }
+
+  deleteJob(jobId: string): boolean {
+    const job = this.jobs.get(jobId);
+    if (!job) return false;
+    
+    if (job.status === 'rendering') {
+      this.cancelJob(jobId);
+    }
+    
+    this.jobs.delete(jobId);
+    this.progressCallbacks.delete(jobId);
+    
+    return true;
   }
 
   async createPreview(

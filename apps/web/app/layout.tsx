@@ -1,10 +1,16 @@
-import type { Metadata } from 'next';
+'use client';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '../styles/globals.css';
 
-export const metadata: Metadata = {
-  title: 'Motion Studio - AI Video Post-Production',
-  description: 'Professional video post-production platform powered by AI agents',
-};
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      retry: 1,
+    },
+  },
+});
 
 export default function RootLayout({
   children,
@@ -13,7 +19,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </body>
     </html>
   );
 }

@@ -11,6 +11,7 @@ const EditPlanSchema = z.object({
     priority: z.number(),
     confidence: z.number(),
     parameters: z.record(z.unknown()),
+    dependencies: z.array(z.string()).optional(),
   })),
   dependencies: z.array(z.object({
     operationId: z.string(),

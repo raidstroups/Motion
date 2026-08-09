@@ -1,6 +1,6 @@
-import { PrismaClient, Project, ProjectStatus } from '@prisma/client';
+import { Project, ProjectStatus } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import prisma from '../client';
 
 export interface CreateProjectInput {
   name: string;

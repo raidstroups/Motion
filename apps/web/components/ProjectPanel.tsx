@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { 
   FolderOpen, 
   Upload, 
@@ -8,15 +8,18 @@ import {
   FileVideo,
   Clock,
   Settings,
-  Trash2
+  Trash2,
+  Plus,
+  Loader2
 } from 'lucide-react';
+import { api } from '../lib/api';
 
 interface Project {
   id: string;
   name: string;
   status: string;
   assets: Asset[];
-  createdAt: Date;
+  createdAt: string;
   settings: {
     resolution: { width: number; height: number };
     fps: number;
@@ -37,10 +40,13 @@ interface Asset {
 interface ProjectPanelProps {
   project: Project | null;
   onProjectChange: (project: Project | null) => void;
+  onCreateProject: () => void;
 }
 
-export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
+export function ProjectPanel({ project, onProjectChange, onCreateProject }: ProjectPanelProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -58,14 +64,46 @@ export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !project) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-      // TODO: Implement actual upload logic
-      console.log('Uploading files:', files);
+      const response = await api.upload(Array.from(files), project.id);
+      
+      for (const file of response.files) {
+        await api.assets.create(project.id, {
+          type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image',
+          name: file.name,
+          url: file.url,
+          mimeType: file.type,
+          size: file.size,
+        });
+      }
+
+      const updatedProject = await api.projects.get(project.id);
+      onProjectChange(updatedProject.project);
+    } catch (error) {
+      console.error('Upload failed:', error);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!project) return;
+    
+    try {
+      await api.assets.delete(project.id, assetId);
+      const updatedProject = await api.projects.get(project.id);
+      onProjectChange(updatedProject.project);
+    } catch (error) {
+      console.error('Delete failed:', error);
     }
   };
 
@@ -73,7 +111,15 @@ export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
     <div className="space-y-6">
       {/* Project Header */}
       <div>
-        <h2 className="text-lg font-semibold mb-2">Project</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">Project</h2>
+          <button 
+            className="p-1 hover:bg-muted rounded"
+            onClick={onCreateProject}
+          >
+            <Plus size={16} />
+          </button>
+        </div>
         {project ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -94,7 +140,12 @@ export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
           </div>
         ) : (
           <div className="text-sm text-muted-foreground">
-            No project selected
+            <button 
+              className="btn btn-primary w-full"
+              onClick={onCreateProject}
+            >
+              Create New Project
+            </button>
           </div>
         )}
       </div>
@@ -104,19 +155,24 @@ export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
         <h3 className="text-sm font-medium mb-2">Assets</h3>
         <label className="block border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors">
           <input
+            ref={fileInputRef}
             type="file"
             accept="video/*,audio/*"
             multiple
             className="hidden"
             onChange={handleFileUpload}
-            disabled={isUploading}
+            disabled={isUploading || !project}
           />
-          <Upload size={24} className="mx-auto mb-2 text-muted-foreground" />
+          {isUploading ? (
+            <Loader2 size={24} className="mx-auto mb-2 animate-spin" />
+          ) : (
+            <Upload size={24} className="mx-auto mb-2 text-muted-foreground" />
+          )}
           <div className="text-sm text-muted-foreground">
-            {isUploading ? 'Uploading...' : 'Drop files or click to upload'}
+            {isUploading ? `Uploading... ${uploadProgress}%` : 'Drop files or click to upload'}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            Video, Audio, Image
+            Video, Audio
           </div>
         </label>
       </div>
@@ -124,12 +180,12 @@ export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
       {/* Assets List */}
       {project && project.assets.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium mb-2">Files</h3>
+          <h3 className="text-sm font-medium mb-2">Files ({project.assets.length})</h3>
           <div className="space-y-2">
             {project.assets.map(asset => (
               <div 
                 key={asset.id}
-                className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg hover:bg-muted cursor-pointer"
+                className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg hover:bg-muted group"
               >
                 {asset.type === 'video' ? (
                   <FileVideo size={16} className="text-primary" />
@@ -143,6 +199,12 @@ export function ProjectPanel({ project, onProjectChange }: ProjectPanelProps) {
                     {asset.duration && ` • ${formatDuration(asset.duration)}`}
                   </div>
                 </div>
+                <button
+                  className="p-1 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 rounded"
+                  onClick={() => handleDeleteAsset(asset.id)}
+                >
+                  <Trash2 size={14} className="text-destructive" />
+                </button>
               </div>
             ))}
           </div>

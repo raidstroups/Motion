@@ -1,6 +1,6 @@
-import { PrismaClient, RenderJob, JobStatus, JobPriority } from '@prisma/client';
+import { RenderJob, JobStatus, JobPriority } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import prisma from '../client';
 
 export interface CreateJobInput {
   projectId: string;
@@ -108,6 +108,14 @@ export class JobRepository {
       where: { id },
       data: { retryCount: job.retryCount + 1 },
     });
+  }
+
+  async delete(id: string): Promise<void> {
+    await prisma.renderJob.delete({ where: { id } });
+  }
+
+  async deleteByProjectId(projectId: string): Promise<void> {
+    await prisma.renderJob.deleteMany({ where: { projectId } });
   }
 }
 

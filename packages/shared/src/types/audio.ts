@@ -1,6 +1,7 @@
 export interface AudioTrack {
   id: string;
-  clipId: string;
+  projectId: string;
+  assetId: string;
   name: string;
   language?: string;
   isOriginal: boolean;

@@ -1,6 +1,6 @@
-import { PrismaClient, Asset, AssetType } from '@prisma/client';
+import { Asset, AssetType } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import prisma from '../client';
 
 export interface CreateAssetInput {
   projectId: string;
